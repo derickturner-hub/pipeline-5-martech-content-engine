@@ -1,0 +1,229 @@
+{
+  "name": "Pipeline 5: Multi-Channel MarTech Content Engine & Distribution",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "content-ingest",
+        "options": {}
+      },
+      "id": "21ee4c26-5fed-4529-a3c0-fa715aab6e23",
+      "name": "Content Ingest Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "338ebf44-5258-4772-b40b-55ba791fb4b0"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// AI Content Transformer: build 3 platform-formatted content assets.\n// Code node has NO network access, so assets are composed deterministically\n// from the incoming payload. Swap this logic for an LLM/HTTP node if needed.\ntry {\n  const body = ($json && $json.body) ? $json.body : $json || {};\n\n  const rawTranscript = (body.raw_transcript || '').toString().trim();\n  const topic = (body.topic || '').toString().trim();\n  const targetAudience = (body.target_audience || '').toString().trim();\n\n  if (!rawTranscript && !topic) {\n    return {\n      json: {\n        success: false,\n        error: 'Missing required input: both raw_transcript and topic are empty.',\n        linkedin_post: '',\n        gbp_update: '',\n        newsletter_snippet: '',\n        linkedin_len: 0,\n        gbp_len: 0,\n        newsletter_len: 0,\n        source: { topic, target_audience: targetAudience },\n      },\n    };\n  }\n\n  const safeTopic = topic || 'Key Insights';\n  const safeAudience = targetAudience || 'our community';\n\n  // Derive a few takeaways from the transcript.\n  const sentences = rawTranscript\n    .split(/(?<=[.!?])\\s+/)\n    .map((s) => s.trim())\n    .filter((s) => s.length > 0);\n\n  const takeaways = (sentences.length > 0 ? sentences.slice(0, 3) : [safeTopic]);\n  const takeawayLines = takeaways.map((t, i) => (i + 1) + '. ' + t).join('\\n');\n\n  const hashtagBase = safeTopic\n    .replace(/[^a-zA-Z0-9\\s]/g, '')\n    .split(/\\s+/)\n    .filter(Boolean)\n    .slice(0, 3)\n    .map((w) => '#' + w.charAt(0).toUpperCase() + w.slice(1));\n  const hashtags = (hashtagBase.length > 0 ? hashtagBase : ['#Insights'])\n    .concat(['#MarTech', '#Growth'])\n    .join(' ');\n\n  const linkedin_post =\n    'Here is what ' + safeAudience + ' need to know about ' + safeTopic + '.\\n\\n' +\n    'Key takeaways:\\n' + takeawayLines + '\\n\\n' +\n    'These insights come straight from the field and are designed to help you move faster. ' +\n    'What resonates most with your team?\\n\\n' + hashtags;\n\n  const gbp_update =\n    'New update on ' + safeTopic + ': practical guidance for ' + safeAudience + '. ' +\n    'Learn how to put this into action today. Read more and get started: https://example.com/learn-more';\n\n  const newsletter_snippet =\n    'Dear subscriber,\\n\\n' +\n    'This week we are unpacking ' + safeTopic + ', with actionable perspective tailored for ' +\n    safeAudience + '. ' + (takeaways[0] || '') + '\\n\\n' +\n    'In the full digest we break down what this means for your roadmap and the concrete next ' +\n    'steps to capture the opportunity. Read on to see how leading teams are responding.';\n\n  return {\n    json: {\n      success: true,\n      error: null,\n      linkedin_post,\n      gbp_update,\n      newsletter_snippet,\n      linkedin_len: linkedin_post.length,\n      gbp_len: gbp_update.length,\n      newsletter_len: newsletter_snippet.length,\n      source: { topic: safeTopic, target_audience: safeAudience },\n    },\n  };\n} catch (err) {\n  return {\n    json: {\n      success: false,\n      error: 'Generation failed: ' + (err && err.message ? err.message : String(err)),\n      linkedin_post: '',\n      gbp_update: '',\n      newsletter_snippet: '',\n      linkedin_len: 0,\n      gbp_len: 0,\n      newsletter_len: 0,\n    },\n  };\n}\n"
+      },
+      "id": "63538645-3364-415b-9ff7-e3a8b80e3419",
+      "name": "Generate Multi-Channel Assets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "linkedin-nonempty",
+              "leftValue": "={{ $json.linkedin_post }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "gbp-nonempty",
+              "leftValue": "={{ $json.gbp_update }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "newsletter-nonempty",
+              "leftValue": "={{ $json.newsletter_snippet }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "linkedin-len",
+              "leftValue": "={{ $json.linkedin_len }}",
+              "rightValue": 120,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "gbp-len",
+              "leftValue": "={{ $json.gbp_len }}",
+              "rightValue": 30,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "newsletter-len",
+              "leftValue": "={{ $json.newsletter_len }}",
+              "rightValue": 120,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "af2679db-c02c-4fa8-a125-e6c5d7a8827a",
+      "name": "Brand & Formatting Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "<__PLACEHOLDER_VALUE__Slack Incoming Webhook URL for #portfolio-revops-sandbox__>",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: \"*New drafts ready for review — \" + $json.source.topic + \"*\\n\\n*LinkedIn Post:*\\n\" + $json.linkedin_post + \"\\n\\n*Google Business Profile:*\\n\" + $json.gbp_update + \"\\n\\n*Newsletter Snippet:*\\n\" + $json.newsletter_snippet }) }}",
+        "options": {}
+      },
+      "id": "d9016d3a-6354-46bc-854c-6a99686065f7",
+      "name": "Post to Sandbox Alert Channel (#portfolio-revops-sandbox)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "<__PLACEHOLDER_VALUE__CMS / Marketing sandbox publish endpoint URL__>",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: \"staged\", topic: $json.source.topic, target_audience: $json.source.target_audience, assets: { linkedin_post: $json.linkedin_post, gbp_update: $json.gbp_update, newsletter_snippet: $json.newsletter_snippet } }) }}",
+        "options": {}
+      },
+      "id": "a8fd6678-afa0-4b05-938e-50944e3f74e3",
+      "name": "Push to CMS / Marketing Sandbox",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Log formatting/QA errors for editorial review.\ntry {\n  const data = $json || {};\n  const issues = [];\n\n  if (!data.linkedin_post) issues.push('linkedin_post missing or empty');\n  else if ((data.linkedin_len || 0) < 120) issues.push('linkedin_post too short (' + (data.linkedin_len || 0) + ' chars)');\n\n  if (!data.gbp_update) issues.push('gbp_update missing or empty');\n  else if ((data.gbp_len || 0) < 30) issues.push('gbp_update too short (' + (data.gbp_len || 0) + ' chars)');\n\n  if (!data.newsletter_snippet) issues.push('newsletter_snippet missing or empty');\n  else if ((data.newsletter_len || 0) < 120) issues.push('newsletter_snippet too short (' + (data.newsletter_len || 0) + ' chars)');\n\n  if (data.error) issues.push('generation error: ' + data.error);\n\n  return {\n    json: {\n      quarantined: true,\n      status: 'needs_editorial_review',\n      quarantined_at: new Date().toISOString(),\n      formatting_errors: issues.length > 0 ? issues : ['Unknown validation failure'],\n      original_assets: {\n        linkedin_post: data.linkedin_post || '',\n        gbp_update: data.gbp_update || '',\n        newsletter_snippet: data.newsletter_snippet || '',\n      },\n      source: data.source || {},\n    },\n  };\n} catch (err) {\n  return {\n    json: {\n      quarantined: true,\n      status: 'needs_editorial_review',\n      formatting_errors: ['Quarantine handler failed: ' + (err && err.message ? err.message : String(err))],\n    },\n  };\n}\n"
+      },
+      "id": "9eb2ee5c-8723-460b-8d94-39c591a7c96d",
+      "name": "Quarantine Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        192
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Content Ingest Webhook": {
+      "main": [
+        [
+          {
+            "node": "Generate Multi-Channel Assets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Multi-Channel Assets": {
+      "main": [
+        [
+          {
+            "node": "Brand & Formatting Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brand & Formatting Check": {
+      "main": [
+        [
+          {
+            "node": "Post to Sandbox Alert Channel (#portfolio-revops-sandbox)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quarantine Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Sandbox Alert Channel (#portfolio-revops-sandbox)": {
+      "main": [
+        [
+          {
+            "node": "Push to CMS / Marketing Sandbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9fb7d09d-c509-4bbd-8857-831c1dd72d14",
+  "meta": {
+    "instanceId": "5ca3fdfe578993803fc549d7af77d64de66ef41d7cc80f61d4fcc25d1b4e7849"
+  },
+  "nodeGroups": [],
+  "id": "Zf5RUJWN6bbbm2a4",
+  "tags": []
+}
